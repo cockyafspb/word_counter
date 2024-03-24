@@ -5,14 +5,13 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"jaytaylor.com/html2text"
 	"net/http"
 	"os"
 	"regexp"
 	"sync"
 )
 
-// структура для хранения результатов каждого запроса
-// включая кол-во вхождений строки "Go" в теле ответа
 type result struct {
 	url   string
 	count int
@@ -90,11 +89,19 @@ func getWordCount(url, word string) result {
 	if err != nil {
 		return result{url, 0, err}
 	}
-	// wordCount := countWords([]rune(string(body)), word)
-	regex := regexp.MustCompile(`\b` + regexp.QuoteMeta(word) + `\b`)
-	wordCount := len(regex.FindAll(body, -1))
-
+	wordCount := countMatches(string(body), word)
 	return result{url, wordCount, err}
+}
+
+func countMatches(doc, word string) int {
+	plainText, err := html2text.FromString(doc, html2text.Options{TextOnly: true})
+	if err != nil {
+		panic(err)
+	}
+	//fmt.Printf("%s\n", plain)
+	regex := regexp.MustCompile(`\b` + regexp.QuoteMeta(word) + `\b`)
+	wordCount := len(regex.FindAll([]byte(plainText), -1))
+	return wordCount
 }
 
 func printResults(resultChan chan *result) {
@@ -102,6 +109,7 @@ func printResults(resultChan chan *result) {
 
 	for res := range resultChan {
 		if res.err != nil {
+			fmt.Printf("Invalid url: %s\n", res.url)
 			continue
 		}
 		fmt.Printf("Count for %s: %d\n", res.url, res.count)
